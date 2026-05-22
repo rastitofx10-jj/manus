@@ -69,17 +69,19 @@ export default function MissionDetail() {
   const [, navigate] = useLocation();
   const [liveEvents, setLiveEvents] = useState<SSEEvent[]>([]);
   const [sseConnected, setSseConnected] = useState(false);
+  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
   const eventSourceRef = useRef<EventSource | null>(null);
   const timelineEndRef = useRef<HTMLDivElement>(null);
+  const seenEventIds = useRef<Set<string>>(new Set());
 
   const utils = trpc.useUtils();
   const { data: mission, isLoading } = trpc.missions.get.useQuery(
     { id: missionId },
-    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 3000 }
+    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 30000 }
   );
   const { data: events } = trpc.missions.getEvents.useQuery(
     { missionId },
-    { enabled: isAuthenticated && !isNaN(missionId) }
+    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 30000 }
   );
 
   const generatePlan = trpc.missions.generatePlan.useMutation({
@@ -113,8 +115,8 @@ export default function MissionDetail() {
   // SSE connection for realtime events
   useEffect(() => {
     if (!isAuthenticated || isNaN(missionId)) return;
-    const activeStatuses = ["planning", "executing"];
-    if (!mission || !activeStatuses.includes(mission.status)) return;
+    // Start SSE immediately for all active mission states
+    if (!mission) return;
 
     const es = new EventSource(`/api/sse/mission/${missionId}`);
     eventSourceRef.current = es;
@@ -125,14 +127,15 @@ export default function MissionDetail() {
     es.addEventListener("message", (e) => {
       try {
         const parsed = JSON.parse(e.data) as SSEEvent;
+        // Deduplicate events by timestamp+event combo
+        const eventKey = `${parsed.timestamp}-${parsed.event}`;
+        if (seenEventIds.current.has(eventKey)) return;
+        seenEventIds.current.add(eventKey);
+        
         setLiveEvents((prev) => [...prev.slice(-199), parsed]);
-        // Refresh mission data on key events
-        if (parsed.event === "mission_event") {
-          const type = (parsed.data as { type?: string }).type;
-          if (type === "status_change" || type === "summary") {
-            utils.missions.get.invalidate({ id: missionId });
-          }
-        }
+        // Refresh mission data on ANY SSE event (not just status_change)
+        utils.missions.get.invalidate({ id: missionId });
+        utils.missions.getEvents.invalidate({ missionId });
       } catch {}
     });
 
@@ -140,7 +143,7 @@ export default function MissionDetail() {
       es.close();
       setSseConnected(false);
     };
-  }, [missionId, isAuthenticated, mission?.status]);
+  }, [missionId, isAuthenticated, mission?.id]);
 
   // Auto-scroll timeline
   useEffect(() => {
@@ -158,9 +161,8 @@ export default function MissionDetail() {
   const completedSteps = plan.filter((s) => s.status === "completed").length;
   const progress = plan.length > 0 ? Math.round((completedSteps / plan.length) * 100) : 0;
 
-  // Merge DB events with live SSE events
+  // Merge DB events with live SSE events, sorted by timestamp
   const dbEvents = events ?? [];
-  const allEvents = [...dbEvents];
 
   return (
     <>
@@ -385,13 +387,13 @@ export default function MissionDetail() {
             </div>
             <ScrollArea className="flex-1">
               <div className="p-3 space-y-1">
-                {allEvents.length === 0 && liveEvents.length === 0 ? (
+                {dbEvents.length === 0 && liveEvents.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-8">
                     Events will appear here during execution
                   </p>
                 ) : (
                   <>
-                    {allEvents.map((event) => (
+                    {dbEvents.map((event) => (
                       <div key={event.id} className="flex gap-2 py-1.5">
                         <EventTypeIcon type={event.type} className="mt-0.5 shrink-0" />
                         <div className="flex-1 min-w-0">

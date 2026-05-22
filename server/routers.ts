@@ -84,6 +84,7 @@ const missionsRouter = router({
       z.object({
         goal: z.string().min(10, "Goal must be at least 10 characters").max(2000),
         workspaceId: z.number().optional(),
+        autoExecute: z.boolean().optional().default(true),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -91,13 +92,16 @@ const missionsRouter = router({
         ? { id: input.workspaceId }
         : await getOrCreateDefaultWorkspace(ctx.user.id);
       const title = input.goal.length > 80 ? input.goal.slice(0, 77) + "…" : input.goal;
-      return createMission({
+      const mission = await createMission({
         userId: ctx.user.id,
         workspaceId: workspace.id,
         title,
         goal: input.goal,
         status: "draft",
       });
+      // Auto-trigger plan generation immediately, then auto-execute if requested
+      generateMissionPlan(mission.id, mission.goal, ctx.user.id, input.autoExecute).catch(console.error);
+      return mission;
     }),
 
   generatePlan: protectedProcedure

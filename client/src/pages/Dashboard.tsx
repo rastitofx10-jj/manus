@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import {
@@ -13,8 +14,11 @@ import {
   Shield,
   Terminal,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
+import { useState } from "react";
 import { PageContent, PageHeader } from "../components/AgentOSLayout";
 import {
   AgentRoleBadge,
@@ -28,11 +32,24 @@ import {
 export default function Dashboard() {
   const { user, isAuthenticated, loading } = useAuth();
   const [, navigate] = useLocation();
+  const [goal, setGoal] = useState("");
 
   const { data: stats } = trpc.missions.stats.useQuery(undefined, { enabled: isAuthenticated });
   const { data: missions } = trpc.missions.list.useQuery({}, { enabled: isAuthenticated });
   const { data: agents } = trpc.agents.list.useQuery(undefined, { enabled: isAuthenticated });
   const { data: pending } = trpc.approvals.pending.useQuery(undefined, { enabled: isAuthenticated });
+
+  const utils = trpc.useUtils();
+  const createMutation = trpc.missions.create.useMutation({
+    onSuccess: (mission) => {
+      utils.missions.list.invalidate();
+      setGoal("");
+      toast.success("Mission created — planning started automatically");
+      // Server auto-triggers plan generation, no need to call it here
+      navigate(`/missions/${mission.id}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   if (loading) return <LoadingSpinner />;
 
@@ -65,14 +82,42 @@ export default function Dashboard() {
       <PageHeader
         title={`Welcome back${user?.name ? `, ${user.name.split(" ")[0]}` : ""}`}
         description="Your autonomous agent workspace"
-        actions={
-          <Button size="sm" onClick={() => navigate("/missions")}>
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            New Mission
-          </Button>
-        }
       />
       <PageContent>
+        {/* Command Center */}
+        <div className="mb-6 bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-foreground">Mission Control</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Describe what you want agents to accomplish. We&apos;ll generate a plan and execute it.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Example: Research the top 5 AI frameworks in 2025, compare features, and write a markdown report…"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              className="min-h-24 bg-background border-border text-sm resize-none"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                size="sm"
+                disabled={goal.trim().length < 10 || createMutation.isPending}
+                onClick={() => createMutation.mutate({ goal: goal.trim() })}
+                className="gap-2"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                {createMutation.isPending ? "Creating…" : "Create & Plan"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <StatCard
@@ -112,12 +157,31 @@ export default function Dashboard() {
               </Button>
             </div>
             {recentMissions.length === 0 ? (
-              <EmptyState
-                icon={Zap}
-                title="No missions yet"
-                description="Create your first mission to get started"
-                action={{ label: "Create Mission", onClick: () => navigate("/missions") }}
-              />
+              <div>
+                <EmptyState
+                  icon={Zap}
+                  title="No missions yet"
+                  description="Create your first mission to get started"
+                />
+                <div className="px-4 py-4 border-t border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Try an example:</p>
+                  <div className="space-y-2">
+                    {[
+                      "Research the top 5 AI frameworks in 2025 and create a comparison table",
+                      "Analyze this GitHub repo and write a technical summary report",
+                      "Create a step-by-step tutorial for learning React hooks",
+                    ].map((example, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setGoal(example)}
+                        className="w-full p-2 text-left text-xs bg-muted/40 border border-border/50 rounded-lg hover:bg-muted/60 transition-colors text-muted-foreground hover:text-foreground"
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="divide-y divide-border">
                 {recentMissions.map((m) => (
