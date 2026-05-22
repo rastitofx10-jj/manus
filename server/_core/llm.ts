@@ -330,3 +330,123 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   return (await response.json()) as InvokeResult;
 }
+
+// Streaming variant for progressive token output
+export async function invokeLLMStream(
+  params: InvokeParams,
+  onToken: (token: string) => void
+): Promise<InvokeResult> {
+  assertApiKey();
+
+  const {
+    messages,
+    tools,
+    toolChoice,
+    tool_choice,
+    outputSchema,
+    output_schema,
+    responseFormat,
+    response_format,
+  } = params;
+
+  const payload: Record<string, unknown> = {
+    model: "gemini-2.5-flash",
+    messages: messages.map(normalizeMessage),
+    stream: true,
+  };
+
+  if (tools && tools.length > 0) {
+    payload.tools = tools;
+  }
+
+  const normalizedToolChoice = normalizeToolChoice(
+    toolChoice || tool_choice,
+    tools
+  );
+  if (normalizedToolChoice) {
+    payload.tool_choice = normalizedToolChoice;
+  }
+
+  payload.max_tokens = 32768;
+  payload.thinking = {
+    budget_tokens: 128,
+  };
+
+  const normalizedResponseFormat = normalizeResponseFormat({
+    responseFormat,
+    response_format,
+    outputSchema,
+    output_schema,
+  });
+
+  if (normalizedResponseFormat) {
+    payload.response_format = normalizedResponseFormat;
+  }
+
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${ENV.forgeApiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `LLM stream failed: ${response.status} ${response.statusText} – ${errorText}`
+    );
+  }
+
+  // Parse SSE stream
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let fullContent = "";
+  let lastChunk: Partial<InvokeResult> = {};
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const chunk = JSON.parse(data);
+          lastChunk = chunk;
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullContent += delta;
+            onToken(delta);
+          }
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    }
+  }
+
+  // Construct final result
+  return {
+    id: (lastChunk as { id?: string }).id ?? "stream",
+    created: (lastChunk as { created?: number }).created ?? Date.now(),
+    model: (lastChunk as { model?: string }).model ?? "gemini-2.5-flash",
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: fullContent },
+        finish_reason: "stop",
+      },
+    ],
+    usage: (lastChunk as { usage?: InvokeResult["usage"] }).usage,
+  };
+}

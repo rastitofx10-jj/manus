@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { invokeLLM } from "./_core/llm";
+import { invokeLLM, invokeLLMStream } from "./_core/llm";
 import {
   getAgentByRole,
   getMission,
@@ -15,7 +15,8 @@ import type { AgentRole, MissionPlanStep } from "../drizzle/schema";
 export async function generateMissionPlan(
   missionId: number,
   goal: string,
-  userId: number
+  userId: number,
+  autoExecute: boolean = false
 ): Promise<MissionPlanStep[]> {
   await updateMission(missionId, { status: "planning" });
   await emitEvent(missionId, "status_change", "planner", { status: "planning", message: "Generating execution plan…" });
@@ -111,10 +112,18 @@ Return ONLY a valid JSON array. No markdown, no explanation.`;
   }
 
   await emitEvent(missionId, "status_change", "planner", {
-    status: "awaiting_approval",
-    message: `Plan ready with ${plan.length} steps. Awaiting your approval.`,
+    status: autoExecute ? "executing" : "awaiting_approval",
+    message: autoExecute 
+      ? `Plan ready with ${plan.length} steps. Auto-executing now…`
+      : `Plan ready with ${plan.length} steps. Awaiting your approval.`,
     plan,
   });
+
+  // Auto-execute if requested (like Manus/Replit Agent behavior)
+  if (autoExecute) {
+    await updateMission(missionId, { status: "executing" });
+    executeMission(missionId, userId).catch(console.error);
+  }
 
   return plan;
 }
@@ -228,15 +237,26 @@ async function executeStep(
     message: `Analyzing: ${step.description}`,
   });
 
-  const response = await invokeLLM({
-    messages: [
-      { role: "system", content: agentPrompts[step.agentRole] },
-      {
-        role: "user",
-        content: `Mission goal: ${missionGoal}\n\nCurrent step: ${step.title}\n\nStep description: ${step.description}\n\nTools available: ${step.tools.join(", ")}\n\nProvide a concise execution summary (2-4 sentences) describing what was accomplished in this step.`,
-      },
-    ],
-  });
+  // Use streaming LLM to emit tokens progressively
+  const response = await invokeLLMStream(
+    {
+      messages: [
+        { role: "system", content: agentPrompts[step.agentRole] },
+        {
+          role: "user",
+          content: `Mission goal: ${missionGoal}\n\nCurrent step: ${step.title}\n\nStep description: ${step.description}\n\nTools available: ${step.tools.join(", ")}\n\nProvide a concise execution summary (2-4 sentences) describing what was accomplished in this step.`,
+        },
+      ],
+    },
+    (token) => {
+      // Emit each token chunk over SSE for real-time display
+      sseEmitter.broadcast(missionId, "stream_token", {
+        stepId: step.id,
+        agentRole: step.agentRole,
+        token,
+      });
+    }
+  );
 
   const rawSummary = response.choices[0]?.message?.content;
   const summary = typeof rawSummary === "string" ? rawSummary : `Completed: ${step.title}`;

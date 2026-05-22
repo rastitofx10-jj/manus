@@ -69,17 +69,19 @@ export default function MissionDetail() {
   const [, navigate] = useLocation();
   const [liveEvents, setLiveEvents] = useState<SSEEvent[]>([]);
   const [sseConnected, setSseConnected] = useState(false);
+  const [streamingTokens, setStreamingTokens] = useState<Record<string, string>>({});
   const eventSourceRef = useRef<EventSource | null>(null);
   const timelineEndRef = useRef<HTMLDivElement>(null);
+  const seenEventIds = useRef<Set<string>>(new Set());
 
   const utils = trpc.useUtils();
   const { data: mission, isLoading } = trpc.missions.get.useQuery(
     { id: missionId },
-    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 3000 }
+    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 30000 }
   );
   const { data: events } = trpc.missions.getEvents.useQuery(
     { missionId },
-    { enabled: isAuthenticated && !isNaN(missionId) }
+    { enabled: isAuthenticated && !isNaN(missionId), refetchInterval: 30000 }
   );
 
   const generatePlan = trpc.missions.generatePlan.useMutation({
@@ -125,14 +127,15 @@ export default function MissionDetail() {
     es.addEventListener("message", (e) => {
       try {
         const parsed = JSON.parse(e.data) as SSEEvent;
+        // Deduplicate events by timestamp+event combo
+        const eventKey = `${parsed.timestamp}-${parsed.event}`;
+        if (seenEventIds.current.has(eventKey)) return;
+        seenEventIds.current.add(eventKey);
+        
         setLiveEvents((prev) => [...prev.slice(-199), parsed]);
-        // Refresh mission data on key events
-        if (parsed.event === "mission_event") {
-          const type = (parsed.data as { type?: string }).type;
-          if (type === "status_change" || type === "summary") {
-            utils.missions.get.invalidate({ id: missionId });
-          }
-        }
+        // Refresh mission data on ANY SSE event (not just status_change)
+        utils.missions.get.invalidate({ id: missionId });
+        utils.missions.getEvents.invalidate({ missionId });
       } catch {}
     });
 

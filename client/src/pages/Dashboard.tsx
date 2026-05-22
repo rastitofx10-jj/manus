@@ -44,15 +44,10 @@ export default function Dashboard() {
     onSuccess: (mission) => {
       utils.missions.list.invalidate();
       setGoal("");
-      toast.success("Mission created and planning started");
-      // Auto-trigger plan generation
-      generatePlanMutation.mutate({ id: mission.id });
+      toast.success("Mission created — planning started automatically");
+      // Server auto-triggers plan generation, no need to call it here
       navigate(`/missions/${mission.id}`);
     },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const generatePlanMutation = trpc.missions.generatePlan.useMutation({
     onError: (err) => toast.error(err.message),
   });
 
