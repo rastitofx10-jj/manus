@@ -91,13 +91,16 @@ const missionsRouter = router({
         ? { id: input.workspaceId }
         : await getOrCreateDefaultWorkspace(ctx.user.id);
       const title = input.goal.length > 80 ? input.goal.slice(0, 77) + "…" : input.goal;
-      return createMission({
+      const mission = await createMission({
         userId: ctx.user.id,
         workspaceId: workspace.id,
         title,
         goal: input.goal,
         status: "draft",
       });
+      // Auto-trigger plan generation immediately
+      generateMissionPlan(mission.id, mission.goal, ctx.user.id).catch(console.error);
+      return mission;
     }),
 
   generatePlan: protectedProcedure

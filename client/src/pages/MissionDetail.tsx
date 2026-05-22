@@ -113,8 +113,8 @@ export default function MissionDetail() {
   // SSE connection for realtime events
   useEffect(() => {
     if (!isAuthenticated || isNaN(missionId)) return;
-    const activeStatuses = ["planning", "executing"];
-    if (!mission || !activeStatuses.includes(mission.status)) return;
+    // Start SSE immediately for all active mission states
+    if (!mission) return;
 
     const es = new EventSource(`/api/sse/mission/${missionId}`);
     eventSourceRef.current = es;
@@ -140,7 +140,7 @@ export default function MissionDetail() {
       es.close();
       setSseConnected(false);
     };
-  }, [missionId, isAuthenticated, mission?.status]);
+  }, [missionId, isAuthenticated, mission?.id]);
 
   // Auto-scroll timeline
   useEffect(() => {
@@ -158,9 +158,8 @@ export default function MissionDetail() {
   const completedSteps = plan.filter((s) => s.status === "completed").length;
   const progress = plan.length > 0 ? Math.round((completedSteps / plan.length) * 100) : 0;
 
-  // Merge DB events with live SSE events
+  // Merge DB events with live SSE events, sorted by timestamp
   const dbEvents = events ?? [];
-  const allEvents = [...dbEvents];
 
   return (
     <>
@@ -385,13 +384,13 @@ export default function MissionDetail() {
             </div>
             <ScrollArea className="flex-1">
               <div className="p-3 space-y-1">
-                {allEvents.length === 0 && liveEvents.length === 0 ? (
+                {dbEvents.length === 0 && liveEvents.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-8">
                     Events will appear here during execution
                   </p>
                 ) : (
                   <>
-                    {allEvents.map((event) => (
+                    {dbEvents.map((event) => (
                       <div key={event.id} className="flex gap-2 py-1.5">
                         <EventTypeIcon type={event.type} className="mt-0.5 shrink-0" />
                         <div className="flex-1 min-w-0">
