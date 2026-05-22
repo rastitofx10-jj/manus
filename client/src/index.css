@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Agent OS Dark Theme ─────────────────────────────────────────────────── */
+@theme inline {
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --color-background: oklch(0.1 0.005 264);
+  --color-foreground: oklch(0.93 0.01 264);
+  --color-card: oklch(0.13 0.007 264);
+  --color-card-foreground: oklch(0.93 0.01 264);
+  --color-popover: oklch(0.14 0.007 264);
+  --color-popover-foreground: oklch(0.93 0.01 264);
+  --color-primary: oklch(0.65 0.2 264);
+  --color-primary-foreground: oklch(0.98 0.005 264);
+  --color-secondary: oklch(0.18 0.01 264);
+  --color-secondary-foreground: oklch(0.85 0.01 264);
+  --color-muted: oklch(0.17 0.008 264);
+  --color-muted-foreground: oklch(0.55 0.01 264);
+  --color-accent: oklch(0.22 0.015 264);
+  --color-accent-foreground: oklch(0.93 0.01 264);
+  --color-destructive: oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.98 0.005 264);
+  --color-border: oklch(0.22 0.01 264);
+  --color-input: oklch(0.18 0.01 264);
+  --color-ring: oklch(0.65 0.2 264);
+  --color-sidebar: oklch(0.11 0.007 264);
+  --color-sidebar-foreground: oklch(0.85 0.01 264);
+  --color-sidebar-border: oklch(0.2 0.01 264);
+
+  /* Status colors */
+  --color-status-draft: oklch(0.55 0.01 264);
+  --color-status-planning: oklch(0.7 0.15 220);
+  --color-status-awaiting: oklch(0.75 0.18 60);
+  --color-status-executing: oklch(0.65 0.2 264);
+  --color-status-completed: oklch(0.65 0.18 145);
+  --color-status-failed: oklch(0.55 0.22 25);
+  --color-status-paused: oklch(0.7 0.15 45);
+
+  /* Risk colors */
+  --color-risk-safe: oklch(0.65 0.18 145);
+  --color-risk-moderate: oklch(0.75 0.18 60);
+  --color-risk-destructive: oklch(0.55 0.22 25);
+
+  /* Agent role colors */
+  --color-agent-planner: oklch(0.65 0.2 264);
+  --color-agent-researcher: oklch(0.65 0.18 200);
+  --color-agent-writer: oklch(0.65 0.18 145);
+  --color-agent-coder: oklch(0.7 0.15 60);
+  --color-agent-reviewer: oklch(0.65 0.18 320);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .flex {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.28 0.01 264);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.35 0.01 264);
+  }
+}
+
+/* ─── Container ──────────────────────────────────────────────────────────── */
+.container {
+  @apply mx-auto px-4;
+  max-width: 1400px;
+}
+
+/* ─── Status badge utilities ─────────────────────────────────────────────── */
+.status-draft       { @apply text-muted-foreground bg-muted; }
+.status-planning    { color: oklch(0.7 0.15 220); background: oklch(0.7 0.15 220 / 0.15); }
+.status-awaiting    { color: oklch(0.75 0.18 60); background: oklch(0.75 0.18 60 / 0.15); }
+.status-executing   { color: oklch(0.65 0.2 264); background: oklch(0.65 0.2 264 / 0.15); }
+.status-completed   { color: oklch(0.65 0.18 145); background: oklch(0.65 0.18 145 / 0.15); }
+.status-failed      { color: oklch(0.55 0.22 25); background: oklch(0.55 0.22 25 / 0.15); }
+.status-paused      { color: oklch(0.7 0.15 45); background: oklch(0.7 0.15 45 / 0.15); }
+
+/* ─── Risk badge utilities ───────────────────────────────────────────────── */
+.risk-safe          { color: oklch(0.65 0.18 145); background: oklch(0.65 0.18 145 / 0.15); }
+.risk-moderate      { color: oklch(0.75 0.18 60); background: oklch(0.75 0.18 60 / 0.15); }
+.risk-destructive   { color: oklch(0.55 0.22 25); background: oklch(0.55 0.22 25 / 0.15); }
+
+/* ─── Agent role badge utilities ─────────────────────────────────────────── */
+.role-planner       { color: oklch(0.65 0.2 264); background: oklch(0.65 0.2 264 / 0.15); }
+.role-researcher    { color: oklch(0.65 0.18 200); background: oklch(0.65 0.18 200 / 0.15); }
+.role-writer        { color: oklch(0.65 0.18 145); background: oklch(0.65 0.18 145 / 0.15); }
+.role-coder         { color: oklch(0.7 0.15 60); background: oklch(0.7 0.15 60 / 0.15); }
+.role-reviewer      { color: oklch(0.65 0.18 320); background: oklch(0.65 0.18 320 / 0.15); }
+
+/* ─── Terminal styles ────────────────────────────────────────────────────── */
+.terminal-output {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: oklch(0.85 0.05 145);
+}
+
+/* ─── SSE pulse animation ────────────────────────────────────────────────── */
+@keyframes sse-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.sse-live {
+  animation: sse-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Execution timeline ─────────────────────────────────────────────────── */
+.timeline-line {
+  position: relative;
+}
+.timeline-line::before {
+  content: "";
+  position: absolute;
+  left: 1.25rem;
+  top: 2.5rem;
+  bottom: 0;
+  width: 1px;
+  background: oklch(0.22 0.01 264);
+}
+
+/* ─── Smooth transitions ─────────────────────────────────────────────────── */
+.page-enter {
+  animation: pageEnter 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Glow effect for active missions ───────────────────────────────────── */
+.mission-glow {
+  box-shadow: 0 0 0 1px oklch(0.65 0.2 264 / 0.3), 0 0 20px oklch(0.65 0.2 264 / 0.1);
+}
